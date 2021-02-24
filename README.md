@@ -1,4 +1,4 @@
-# Bolha Scraper
+# Bolha Ad Scraper
 
 Ad scraper for [bolha.com](https://www.bolha.com/)
 
