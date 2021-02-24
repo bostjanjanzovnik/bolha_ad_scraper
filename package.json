@@ -1,0 +1,45 @@
+{
+  "name": "bolha-scraper",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx nodemon --exec npx ts-node src/index.ts",
+    "prod": "npx ts-node src/index.ts",
+    "build": "tsc -b",
+    "lint": "eslint --ext .ts --fix",
+    "clean": "rimraf dist",
+    "prettier": "prettier --write \"{src,test}/**/*.{ts,json,md}\"",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "precommit": "lint-staged",
+    "prepush": "yarn test"
+  },
+  "author": "Bostjan Janzovnik",
+  "license": "ISC",
+  "lint-staged": {
+    "./src/**/*.ts": [
+      "yarn prettier",
+      "yarn lint",
+      "git add"
+    ]
+  },
+  "dependencies": {
+    "dotenv": "^8.2.0",
+    "puppeteer": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^14.14.31",
+    "@types/puppeteer": "^5.4.3",
+    "@typescript-eslint/eslint-plugin": "^4.15.2",
+    "@typescript-eslint/parser": "^4.15.2",
+    "eslint": "^7.20.0",
+    "eslint-config-prettier": "^8.0.0",
+    "eslint-plugin-import": "^2.22.1",
+    "eslint-plugin-prettier": "^3.3.1",
+    "eslint-plugin-simple-import-sort": "^7.0.0",
+    "lint-staged": "^10.5.4",
+    "prettier": "^2.2.1",
+    "ts-node": "^9.1.1",
+    "typescript": "^4.1.5"
+  }
+}
