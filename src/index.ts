@@ -6,4 +6,4 @@ import { Scraper } from "./Scraper"
 
 const scraper = new Scraper()
 
-scraper.scrape()
+scraper.scrapeUrls()
