@@ -1,13 +1,17 @@
 import moment from "moment"
 import puppeteer, { Browser, ElementHandle, Page } from "puppeteer"
 import { Config } from "./config"
+import { Database } from "./Database"
 import { Ad } from "./interfaces"
 
 export class Scraper {
     private readonly config
+    // @ts-ignore
+    private database: Database
 
-    constructor() {
+    constructor(database: Database) {
         this.config = new Config()
+        this.database = database
     }
 
     async scrapeUrls(): Promise<void> {
