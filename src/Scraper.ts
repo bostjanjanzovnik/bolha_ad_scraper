@@ -1,10 +1,10 @@
 import moment from "moment"
-import puppeteer, { ElementHandle, Page } from "puppeteer"
+import puppeteer, { Browser, ElementHandle, Page } from "puppeteer"
 import { Config } from "./config"
 import { Ad } from "./interfaces"
 
 export class Scraper {
-    readonly config
+    private readonly config
 
     constructor() {
         this.config = new Config()
@@ -18,34 +18,50 @@ export class Scraper {
         }
 
         const browser = await puppeteer.launch()
+        const ads: Ad[] = []
+
+        await Promise.all(urls.map(async url => await this.iteratePages(browser, url, ads)))
+
+        console.log("ADS", ads.length)
+    }
+
+    private async iteratePages(browser: Browser, url: string, ads: Ad[]): Promise<void> {
         const page = await browser.newPage()
 
-        const ads = await urls.reduce(async (acc, url) => {
-            const accumulator = await acc
+        await Promise.all([page.goto(url), page.waitForNavigation({ waitUntil: "networkidle2" })])
 
-            await page.goto(url)
+        let pageAds: Ad[] = []
 
-            const pageAds = await this.getPageAds(page)
+        try {
+            pageAds = await this.getPageAds(page)
+        } catch (e) {
+            console.log("Could not get page ads", e)
+        }
 
-            if (pageAds.length) {
-                pageAds.forEach(pageAd => accumulator.push(pageAd))
+        pageAds.forEach(ad => ads.push(ad))
+
+        console.log("URL", url, pageAds.length)
+
+        try {
+            const nextPageUrl = await this.getNextPageUrl(page)
+
+            if (nextPageUrl) {
+                await this.iteratePages(browser, nextPageUrl, ads)
             }
-
-            return accumulator
-        }, Promise.resolve([] as Ad[]))
-
-        console.log("ADS", ads)
+        } catch (e) {
+            console.log("Page iteration done")
+        }
     }
 
     private async getPageAds(page: Page): Promise<Ad[]> {
-        const adListItems = await page.$$("ul.EntityList-items>li.EntityList-item")
+        const adListItems = await this.getAdListItems(page)
 
         return await adListItems.reduce(async (acc, adListItem) => {
             const accumulator = await acc
 
             try {
-                const adId = await Scraper.getAdId(adListItem)
-                const adTitle = await Scraper.getAdTitle(adListItem)
+                const adId = await this.getAdId(adListItem)
+                const adTitle = await this.getAdTitle(adListItem)
                 const adUrl = await this.getAdUrl(adListItem)
 
                 if (adId && adTitle && adUrl) {
@@ -53,10 +69,10 @@ export class Scraper {
                         id: adId,
                         title: adTitle,
                         url: adUrl,
-                        publishedDate: await Scraper.getAdPublishedDate(adListItem),
-                        price: await Scraper.getAdPrice(adListItem),
-                        currency: await Scraper.getAdPriceCurrency(adListItem),
-                        description: await Scraper.getAdDescription(adListItem),
+                        publishedDate: await this.getAdPublishedDate(adListItem),
+                        price: await this.getAdPrice(adListItem),
+                        currency: await this.getAdPriceCurrency(adListItem),
+                        description: await this.getAdDescription(adListItem),
                     })
                 }
             } catch (e) {
@@ -65,49 +81,57 @@ export class Scraper {
 
             return accumulator
         }, Promise.resolve([] as Ad[]))
-
-        // TODO: iterate through results pages
     }
 
-    private static async getAdId(adListItem: ElementHandle): Promise<string | undefined> {
-        const adId = await adListItem.$eval("h3.entity-title>a", el => el.getAttribute("name"))
+    private async getNextPageUrl(page: Page): Promise<string | undefined> {
+        const nextPageUrl = await page.$eval(this.config.selectorForNextPageUrl, el => el.getAttribute("data-href"))
+
+        return nextPageUrl ? nextPageUrl.toString() : undefined
+    }
+
+    private async getAdListItems(page: Page): Promise<ElementHandle[]> {
+        return page.$$(this.config.selectorForAdListItems)
+    }
+
+    private async getAdId(adListItem: ElementHandle): Promise<string | undefined> {
+        const adId = await adListItem.$eval(this.config.selectorForAdId, el => el.getAttribute("name"))
 
         return adId ? adId.toString() : undefined
     }
 
-    private static async getAdTitle(adListItem: ElementHandle): Promise<string | undefined> {
-        const adTitle = await adListItem.$eval("h3.entity-title>a", el => el.innerHTML)
+    private async getAdTitle(adListItem: ElementHandle): Promise<string | undefined> {
+        const adTitle = await adListItem.$eval(this.config.selectorForAdTitle, el => el.innerHTML)
 
         return adTitle ? adTitle.toString() : undefined
     }
 
     private async getAdUrl(adListItem: ElementHandle): Promise<string | undefined> {
-        const urlPath = await adListItem.$eval("h3.entity-title>a", el => el.getAttribute("href"))
+        const urlPath = await adListItem.$eval(this.config.selectorForAdUrl, el => el.getAttribute("href"))
 
         return urlPath ? `${this.config.bolhaUrl}${urlPath.toString()}` : undefined
     }
 
-    private static async getAdPublishedDate(adListItem: ElementHandle): Promise<string | undefined> {
-        const adPublishedDateAttr = await adListItem.$eval("div.entity-pub-date>.date", el => el.getAttribute("datetime"))
+    private async getAdPublishedDate(adListItem: ElementHandle): Promise<string | undefined> {
+        const adPublishedDateAttr = await adListItem.$eval(this.config.selectorForAdPublishedDate, el => el.getAttribute("datetime"))
 
         return adPublishedDateAttr ? moment(adPublishedDateAttr.toString()).format("DD.MM.YYYY HH:mm") : undefined
     }
 
-    private static async getAdPrice(adListItem: ElementHandle): Promise<string | undefined> {
-        const adPriceHtml = await adListItem.$eval("div.entity-prices .price", el => el.innerHTML)
+    private async getAdPrice(adListItem: ElementHandle): Promise<string | undefined> {
+        const adPriceHtml = await adListItem.$eval(this.config.selectorForAdPrice, el => el.innerHTML)
         const adPriceMatch = adPriceHtml ? adPriceHtml.toString().match(/[0-9.,]+/) : undefined
 
         return adPriceMatch?.length ? adPriceMatch[0] : undefined
     }
 
-    private static async getAdPriceCurrency(adListItem: ElementHandle): Promise<string | undefined> {
-        const adPriceCurrency = await adListItem.$eval("div.entity-prices .currency", el => el.innerHTML)
+    private async getAdPriceCurrency(adListItem: ElementHandle): Promise<string | undefined> {
+        const adPriceCurrency = await adListItem.$eval(this.config.selectorForAdPriceCurrency, el => el.innerHTML)
 
         return adPriceCurrency ? adPriceCurrency.toString() : undefined
     }
 
-    private static async getAdDescription(adListItem: ElementHandle): Promise<string | undefined> {
-        const adDescriptionHtml = await adListItem.$eval("div.entity-description>.entity-description-main", el => el.innerHTML)
+    private async getAdDescription(adListItem: ElementHandle): Promise<string | undefined> {
+        const adDescriptionHtml = await adListItem.$eval(this.config.selectorForAdDescription, el => el.innerHTML)
 
         return adDescriptionHtml
             ? adDescriptionHtml
