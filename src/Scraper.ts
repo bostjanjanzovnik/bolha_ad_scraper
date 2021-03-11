@@ -27,6 +27,10 @@ export class Scraper {
         await Promise.all(urls.map(async url => await this.iteratePages(browser, url, ads)))
 
         console.log("ADS", ads.length)
+
+        // const savedAds = await this.database.saveAds(ads) // TODO: fix
+
+        // console.log("SAVED ADS", savedAds.length)
     }
 
     private async iteratePages(browser: Browser, url: string, ads: Ad[]): Promise<void> {
